@@ -27,6 +27,7 @@ textarea{min-height:70px;resize:vertical}.row{display:grid;grid-template-columns
 .job{margin-bottom:10px}.job span{color:var(--mut);font-size:14px}.pre{white-space:pre-wrap;margin:2px 0}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:14px;z-index:9}
 .empty{text-align:center;color:var(--mut);padding:40px 10px}.auth{max-width:380px;margin:30px auto}.err{color:var(--dg);font-size:14px;min-height:20px}
+.sg{margin:8px 0}.sg small{display:block;color:var(--mut);margin-bottom:4px}.sgc{cursor:pointer;border:1px dashed var(--ac);background:var(--card);color:var(--ac);font:inherit;font-size:14px}
 @media print{.noprint{display:none!important}body{background:#fff}}
 </style></head><body><main id="app"><p class="sub">Loading…</p></main>
 <script type="module">
@@ -100,11 +101,12 @@ function renderList(){
   <div class="note">🔒 Nothing here is public. Each link is a long random code that only works for people you send it to.</div>
   <div id="ls">${list.length?'':'<div class="empty">No profile-resumes yet. Create your first one.</div>'}</div>`;
   $('#lo').onclick=()=>A.signOut(auth);
-  $('#nw').onclick=()=>edit({id:rid(10),label:'',name:'',headline:'',email:'',phone:'',location:'',links:'',summary:'',skills:'',exp:[],edu:[],token:null});
+  $('#nw').onclick=()=>{const l=[...list].sort((a,b)=>(b.updated||0)-(a.updated||0))[0]||{};edit({id:rid(10),label:'',name:l.name||'',headline:'',email:l.email||'',phone:l.phone||'',location:l.location||'',links:l.links||'',summary:'',skills:'',exp:[],edu:[],token:null})};
   [...list].sort((a,b)=>(b.updated||0)-(a.updated||0)).forEach(r=>{
     const c=document.createElement('div');c.className='card';
-    c.innerHTML=`<div class="info"><b>${esc(r.label||'Untitled')}</b>${r.token?'<span class="tag">shared</span>':''}<small>${esc(r.name||'')}${r.headline?' — '+esc(r.headline):''}</small>${r.token?`<small>👁 ${(views[r.token]?.count)||0} views${views[r.token]?' · last '+ago(views[r.token].last):''}</small>`:''}</div><div class="acts"><button class="sh">Share link</button><button class="d dl">Delete</button></div>`;
+    c.innerHTML=`<div class="info"><b>${esc(r.label||'Untitled')}</b>${r.token?'<span class="tag">shared</span>':''}<small>${esc(r.name||'')}${r.headline?' — '+esc(r.headline):''}</small>${r.token?`<small>👁 ${(views[r.token]?.count)||0} views${views[r.token]?' · last '+ago(views[r.token].last):''}</small>`:''}</div><div class="acts"><button class="sh">Share link</button><button class="dp">Duplicate</button><button class="d dl">Delete</button></div>`;
     c.querySelector('.info').onclick=()=>edit(r);
+    c.querySelector('.dp').onclick=()=>edit({...JSON.parse(JSON.stringify(r)),id:rid(10),label:(r.label||'Untitled')+' (copy)',token:null,updated:0});
     c.querySelector('.sh').onclick=async()=>{try{if(!r.token)r.token=rid(24);await save(r);await copy(link(r.token))}catch(e){toast('Could not share')}};
     c.querySelector('.dl').onclick=async()=>{if(!confirm(`Delete "${r.label||'Untitled'}"? Its link will stop working.`))return;try{if(r.token)await F.deleteDoc(F.doc(db,'shared',r.token));await F.deleteDoc(F.doc(db,'views',r.token));await F.deleteDoc(mine(r.id))}catch(e){toast('Delete failed')}};
     $('#ls').appendChild(c);
@@ -123,11 +125,11 @@ function edit(r){
   $('#app').innerHTML=`<div class="top"><button id="bk">← Back</button><div class="acts"><button id="sh">Share link</button>${cur.token?'<button class="d" id="un">Stop sharing</button>':''}<button class="p" id="sv">Save</button></div></div>
   <h2>Purpose of this profile-resume</h2>${f('label','Name it so you remember who it\u2019s for (e.g. “Design jobs – startups”)')}
   <h2>Details</h2><div class="row"><div>${f('name','Full name')}</div><div>${f('headline','Headline / title')}</div><div>${f('email','Email')}</div><div>${f('phone','Phone')}</div><div>${f('location','Location')}</div><div>${f('links','Website / LinkedIn')}</div></div>
-  ${f('summary','Summary','textarea')}${f('skills','Skills (comma separated)')}
-  <h2>Experience</h2><div id="ex"></div><button id="ax">+ Add experience</button>
-  <h2>Education</h2><div id="ed"></div><button id="ae">+ Add education</button>
+  ${f('summary','Summary','textarea')}<div id="sgM"></div>${f('skills','Skills (comma separated)')}<div id="sgS"></div>
+  <h2>Experience</h2><div id="ex"></div><button id="ax">+ Add experience</button><div id="sgX"></div>
+  <h2>Education</h2><div id="ed"></div><button id="ae">+ Add education</button><div id="sgE"></div>
   <h2>Preview</h2><div id="pv"></div>`;
-  const sync=()=>{document.querySelectorAll('[data-k]').forEach(i=>cur[i.dataset.k]=i.value);$('#pv').innerHTML=resumeHTML(cur)};
+  const sync=()=>{document.querySelectorAll('[data-k]').forEach(i=>cur[i.dataset.k]=i.value);$('#pv').innerHTML=resumeHTML(cur);sug()};
   const sub=(id,arr,fields)=>{const box=$(id);box.innerHTML='';cur[arr].forEach((it,i)=>{const d=document.createElement('div');d.className='sub-card';
     d.innerHTML=fields.map(([n,l,t])=>`<label>${l}</label>${t?`<textarea data-n="${n}">${esc(it[n])}</textarea>`:`<input data-n="${n}" value="${esc(it[n])}">`}`).join('')+'<button class="d" style="margin-top:8px">Remove</button>';
     d.querySelectorAll('[data-n]').forEach(x=>x.oninput=()=>{it[x.dataset.n]=x.value;$('#pv').innerHTML=resumeHTML(cur)});
@@ -137,6 +139,19 @@ function edit(r){
   $('#ax').onclick=()=>{cur.exp.push({role:'',org:'',dates:'',desc:''});sub('#ex','exp',F1)};
   $('#ae').onclick=()=>{cur.edu.push({deg:'',org:'',dates:''});sub('#ed','edu',F2)};
   document.querySelectorAll('[data-k]').forEach(i=>i.oninput=sync);sync();
+  function sug(){
+    const o=list.filter(r=>r.id!==cur.id),key=e=>[e.role||e.deg,e.org,e.dates].join('|').toLowerCase();
+    const box=(id,label,items,pick)=>{const b=$(id);b.innerHTML='';if(!items.length)return;const w=document.createElement('div');w.className='sg';w.innerHTML=`<small>${label}</small>`;
+      items.forEach(([t,v])=>{const c=document.createElement('button');c.type='button';c.className='chip sgc';c.textContent='+ '+t;c.onclick=()=>pick(v);w.appendChild(c)});b.appendChild(w)};
+    const have=new Set(cur.skills.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean));
+    const sk=[...new Set(o.flatMap(r=>(r.skills||'').split(',').map(x=>x.trim()).filter(Boolean)))].filter(x=>!have.has(x.toLowerCase()));
+    box('#sgS','Skills from your other profiles — tap to add',sk.map(x=>[x,x]),v=>{cur.skills=(cur.skills.trim()?cur.skills.replace(/[,\s]+$/,'')+', ':'')+v;document.querySelector('[data-k=skills]').value=cur.skills;sync()});
+    const sm=[...new Set(o.map(r=>(r.summary||'').trim()).filter(x=>x&&x!==(cur.summary||'').trim()))];
+    box('#sgM','Reuse a summary from another profile',sm.map(x=>[x.length>40?x.slice(0,40)+'…':x,x]),v=>{cur.summary=v;document.querySelector('[data-k=summary]').value=v;sync()});
+    const pool=(arr,mine)=>{const seen=new Set((mine||[]).map(key)),m=new Map();o.forEach(r=>(r[arr]||[]).forEach(e=>{const k=key(e);if(k!=='||'&&!seen.has(k)&&!m.has(k))m.set(k,e)}));return[...m.values()]};
+    box('#sgX','Reuse experience from your other profiles',pool('exp',cur.exp).map(e=>[(e.role||'Role')+(e.org?' · '+e.org:''),e]),e=>{cur.exp.push({...e});sub('#ex','exp',F1);sync()});
+    box('#sgE','Reuse education from your other profiles',pool('edu',cur.edu).map(e=>[(e.deg||'Course')+(e.org?' · '+e.org:''),e]),e=>{cur.edu.push({...e});sub('#ed','edu',F2);sync()});
+  }
   $('#bk').onclick=renderList;
   $('#sv').onclick=async()=>{sync();try{await save(cur);toast('Saved')}catch(e){toast('Save failed')}};
   $('#sh').onclick=async()=>{sync();try{if(!cur.token)cur.token=rid(24);await save(cur);await copy(link(cur.token));edit(cur)}catch(e){toast('Could not share')}};
