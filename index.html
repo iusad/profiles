@@ -92,6 +92,16 @@ function renderAuth(){
   $('#fp').onclick=e=>{e.preventDefault();run(async()=>{await A.sendPasswordResetEmail(auth,$('#em').value);toast('Reset email sent')})};
 }
 
+/* ---------- switch a link off ---------- */
+async function off(r){
+  if(!confirm('Switch off this link? Anyone who has it will no longer be able to open this profile-resume.'))return false;
+  try{
+    await F.deleteDoc(F.doc(db,'shared',r.token));
+    try{await F.deleteDoc(F.doc(db,'views',r.token))}catch(e){}
+    r.token=null;await save(r);toast('Link switched off');return true;
+  }catch(e){toast('Could not switch off');return false}
+}
+
 /* ---------- dashboard ---------- */
 const mine=id=>F.doc(db,'users',user.uid,'resumes',id);
 function renderList(){
@@ -104,9 +114,10 @@ function renderList(){
   $('#nw').onclick=()=>{const l=[...list].sort((a,b)=>(b.updated||0)-(a.updated||0))[0]||{};edit({id:rid(10),label:'',name:l.name||'',headline:'',email:l.email||'',phone:l.phone||'',location:l.location||'',links:l.links||'',summary:'',skills:'',exp:[],edu:[],token:null})};
   [...list].sort((a,b)=>(b.updated||0)-(a.updated||0)).forEach(r=>{
     const c=document.createElement('div');c.className='card';
-    c.innerHTML=`<div class="info"><b>${esc(r.label||'Untitled')}</b>${r.token?'<span class="tag">shared</span>':''}<small>${esc(r.name||'')}${r.headline?' — '+esc(r.headline):''}</small>${r.token?`<small>👁 ${(views[r.token]?.count)||0} views${views[r.token]?' · last '+ago(views[r.token].last):''}</small>`:''}</div><div class="acts"><button class="sh">Share link</button><button class="dp">Duplicate</button><button class="d dl">Delete</button></div>`;
+    c.innerHTML=`<div class="info"><b>${esc(r.label||'Untitled')}</b>${r.token?'<span class="tag">shared</span>':''}<small>${esc(r.name||'')}${r.headline?' — '+esc(r.headline):''}</small>${r.token?`<small>👁 ${(views[r.token]?.count)||0} views${views[r.token]?' · last '+ago(views[r.token].last):''}</small>`:''}</div><div class="acts"><button class="sh">Share link</button>${r.token?'<button class="of">Switch off link</button>':''}<button class="dp">Duplicate</button><button class="d dl">Delete</button></div>`;
     c.querySelector('.info').onclick=()=>edit(r);
     c.querySelector('.dp').onclick=()=>edit({...JSON.parse(JSON.stringify(r)),id:rid(10),label:(r.label||'Untitled')+' (copy)',token:null,updated:0});
+    const of=c.querySelector('.of');if(of)of.onclick=()=>off(r);
     c.querySelector('.sh').onclick=async()=>{try{if(!r.token)r.token=rid(24);await save(r);await copy(link(r.token))}catch(e){toast('Could not share')}};
     c.querySelector('.dl').onclick=async()=>{if(!confirm(`Delete "${r.label||'Untitled'}"? Its link will stop working.`))return;try{if(r.token)await F.deleteDoc(F.doc(db,'shared',r.token));await F.deleteDoc(F.doc(db,'views',r.token));await F.deleteDoc(mine(r.id))}catch(e){toast('Delete failed')}};
     $('#ls').appendChild(c);
@@ -122,7 +133,7 @@ async function save(r){
 function edit(r){
   cur=JSON.parse(JSON.stringify(r));
   const f=(k,l,t='input')=>`<label>${l}</label><${t} data-k="${k}" ${t==='input'?`value="${esc(cur[k])}"`:''}>${t==='textarea'?esc(cur[k])+'</textarea>':''}`;
-  $('#app').innerHTML=`<div class="top"><button id="bk">← Back</button><div class="acts"><button id="sh">Share link</button>${cur.token?'<button class="d" id="un">Stop sharing</button>':''}<button class="p" id="sv">Save</button></div></div>
+  $('#app').innerHTML=`<div class="top"><button id="bk">← Back</button><div class="acts"><button id="sh">Share link</button>${cur.token?'<button class="d" id="un">Switch off link</button>':''}<button class="p" id="sv">Save</button></div></div>
   <h2>Purpose of this profile-resume</h2>${f('label','Name it so you remember who it\u2019s for (e.g. “Design jobs – startups”)')}
   <h2>Details</h2><div class="row"><div>${f('name','Full name')}</div><div>${f('headline','Headline / title')}</div><div>${f('email','Email')}</div><div>${f('phone','Phone')}</div><div>${f('location','Location')}</div><div>${f('links','Website / LinkedIn')}</div></div>
   ${f('summary','Summary','textarea')}<div id="sgM"></div>${f('skills','Skills (comma separated)')}<div id="sgS"></div>
@@ -155,7 +166,7 @@ function edit(r){
   $('#bk').onclick=renderList;
   $('#sv').onclick=async()=>{sync();try{await save(cur);toast('Saved')}catch(e){toast('Save failed')}};
   $('#sh').onclick=async()=>{sync();try{if(!cur.token)cur.token=rid(24);await save(cur);await copy(link(cur.token));edit(cur)}catch(e){toast('Could not share')}};
-  const un=$('#un');if(un)un.onclick=async()=>{try{await F.deleteDoc(F.doc(db,'shared',cur.token));cur.token=null;await save(cur);toast('Link disabled');edit(cur)}catch(e){toast('Failed')}};
+  const un=$('#un');if(un)un.onclick=async()=>{sync();if(await off(cur))edit(cur)};
 }
 
 /* ---------- boot ---------- */
