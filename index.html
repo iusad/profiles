@@ -119,7 +119,11 @@ function renderList(){
     c.querySelector('.dp').onclick=()=>edit({...JSON.parse(JSON.stringify(r)),id:rid(10),label:(r.label||'Untitled')+' (copy)',token:null,updated:0});
     const of=c.querySelector('.of');if(of)of.onclick=()=>off(r);
     c.querySelector('.sh').onclick=async()=>{try{if(!r.token)r.token=rid(24);await save(r);await copy(link(r.token))}catch(e){toast('Could not share')}};
-    c.querySelector('.dl').onclick=async()=>{if(!confirm(`Delete "${r.label||'Untitled'}"? Its link will stop working.`))return;try{if(r.token)await F.deleteDoc(F.doc(db,'shared',r.token));await F.deleteDoc(F.doc(db,'views',r.token));await F.deleteDoc(mine(r.id))}catch(e){toast('Delete failed')}};
+    c.querySelector('.dl').onclick=async()=>{if(!confirm(`Delete "${r.label||'Untitled'}"? Its link will stop working.`))return;
+      try{
+        if(r.token){for(const col of['shared','views']){try{await F.deleteDoc(F.doc(db,col,r.token))}catch(e){}}}
+        await F.deleteDoc(mine(r.id));toast('Deleted');
+      }catch(e){console.error(e);toast('Delete failed: '+(e.code||e.message||'error'))}};
     $('#ls').appendChild(c);
   });
 }
