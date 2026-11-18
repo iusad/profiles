@@ -28,6 +28,8 @@ textarea{min-height:70px;resize:vertical}.row{display:grid;grid-template-columns
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:14px;z-index:9}
 .empty{text-align:center;color:var(--mut);padding:40px 10px}.auth{max-width:380px;margin:30px auto}.err{color:var(--dg);font-size:14px;min-height:20px}
 .sg{margin:8px 0}.sg small{display:block;color:var(--mut);margin-bottom:4px}.sgc{cursor:pointer;border:1px dashed var(--ac);background:var(--card);color:var(--ac);font:inherit;font-size:14px}
+.ph{width:96px;height:96px;border-radius:50%;object-fit:cover;flex:none;border:1px solid var(--bd)}.phe{display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:12px;background:var(--card)}
+.hdr{display:flex;gap:18px;align-items:center}.phrow{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 @media print{.noprint{display:none!important}body{background:#fff}}
 </style></head><body><main id="app"><p class="sub">Loading…</p></main>
 <script type="module">
@@ -49,7 +51,8 @@ async function copy(t){try{await navigator.clipboard.writeText(t);toast('Link co
 function resumeHTML(r){
   const sk=(r.skills||'').split(',').map(s=>s.trim()).filter(Boolean);
   const ct=[r.email,r.phone,r.location,r.links].filter(Boolean).map(esc).join(' · ');
-  return `<div class="res"><h1>${esc(r.name||'Your name')}</h1>${r.headline?`<div class="hd">${esc(r.headline)}</div>`:''}<div class="ct">${ct}</div>
+  const ph=/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(r.photo||'')?`<img class="ph" src="${r.photo}" alt="">`:'';
+  return `<div class="res"><div class="hdr">${ph}<div><h1>${esc(r.name||'Your name')}</h1>${r.headline?`<div class="hd">${esc(r.headline)}</div>`:''}<div class="ct">${ct}</div></div></div>
   ${r.summary?`<h3>Summary</h3><p class="pre">${esc(r.summary)}</p>`:''}
   ${sk.length?`<h3>Skills</h3>${sk.map(s=>`<span class="chip">${esc(s)}</span>`).join('')}`:''}
   ${(r.exp||[]).length?`<h3>Experience</h3>${r.exp.map(e=>`<div class="job"><b>${esc(e.role)}</b> ${e.org?'· '+esc(e.org):''}<br><span>${esc(e.dates)}</span><p class="pre">${esc(e.desc)}</p></div>`).join('')}`:''}
@@ -111,7 +114,7 @@ function renderList(){
   <div class="note">🔒 Nothing here is public. Each link is a long random code that only works for people you send it to.</div>
   <div id="ls">${list.length?'':'<div class="empty">No profile-resumes yet. Create your first one.</div>'}</div>`;
   $('#lo').onclick=()=>A.signOut(auth);
-  $('#nw').onclick=()=>{const l=[...list].sort((a,b)=>(b.updated||0)-(a.updated||0))[0]||{};edit({id:rid(10),label:'',name:l.name||'',headline:'',email:l.email||'',phone:l.phone||'',location:l.location||'',links:l.links||'',summary:'',skills:'',exp:[],edu:[],token:null})};
+  $('#nw').onclick=()=>{const l=[...list].sort((a,b)=>(b.updated||0)-(a.updated||0))[0]||{};edit({id:rid(10),label:'',name:l.name||'',headline:'',email:l.email||'',phone:l.phone||'',location:l.location||'',links:l.links||'',photo:l.photo||'',summary:'',skills:'',exp:[],edu:[],token:null})};
   [...list].sort((a,b)=>(b.updated||0)-(a.updated||0)).forEach(r=>{
     const c=document.createElement('div');c.className='card';
     c.innerHTML=`<div class="info"><b>${esc(r.label||'Untitled')}</b>${r.token?'<span class="tag">shared</span>':''}<small>${esc(r.name||'')}${r.headline?' — '+esc(r.headline):''}</small>${r.token?`<small>👁 ${(views[r.token]?.count)||0} views${views[r.token]?' · last '+ago(views[r.token].last):''}</small>`:''}</div><div class="acts"><button class="sh">Share link</button>${r.token?'<button class="of">Switch off link</button>':''}<button class="dp">Duplicate</button><button class="d dl">Delete</button></div>`;
@@ -133,12 +136,16 @@ async function save(r){
   if(r.token){const{id,label,token,...pub}=r;await F.setDoc(F.doc(db,'shared',r.token),{...pub,owner:user.uid})}
 }
 
+/* ---------- photo: crop to square, shrink to 240px JPEG (~15-25 KB), stored inside the document ---------- */
+function shrink(f,S=240){return new Promise((ok,no)=>{const u=URL.createObjectURL(f),i=new Image();i.onload=()=>{const m=Math.min(i.width,i.height),c=document.createElement('canvas');c.width=c.height=S;c.getContext('2d').drawImage(i,(i.width-m)/2,(i.height-m)/2,m,m,0,0,S,S);URL.revokeObjectURL(u);ok(c.toDataURL('image/jpeg',.82))};i.onerror=()=>no(new Error('bad image'));i.src=u})}
+
 /* ---------- editor ---------- */
 function edit(r){
   cur=JSON.parse(JSON.stringify(r));
   const f=(k,l,t='input')=>`<label>${l}</label><${t} data-k="${k}" ${t==='input'?`value="${esc(cur[k])}"`:''}>${t==='textarea'?esc(cur[k])+'</textarea>':''}`;
   $('#app').innerHTML=`<div class="top"><button id="bk">← Back</button><div class="acts"><button id="sh">Share link</button>${cur.token?'<button class="d" id="un">Switch off link</button>':''}<button class="p" id="sv">Save</button></div></div>
   <h2>Purpose of this profile-resume</h2>${f('label','Name it so you remember who it\u2019s for (e.g. “Design jobs – startups”)')}
+  <h2>Profile photo</h2><div class="phrow"><div id="phv"></div><div class="acts"><button type="button" id="pu">Upload photo</button><button type="button" class="d" id="pr">Remove</button></div><input type="file" id="pf" accept="image/*" hidden></div>
   <h2>Details</h2><div class="row"><div>${f('name','Full name')}</div><div>${f('headline','Headline / title')}</div><div>${f('email','Email')}</div><div>${f('phone','Phone')}</div><div>${f('location','Location')}</div><div>${f('links','Website / LinkedIn')}</div></div>
   ${f('summary','Summary','textarea')}<div id="sgM"></div>${f('skills','Skills (comma separated)')}<div id="sgS"></div>
   <h2>Experience</h2><div id="ex"></div><button id="ax">+ Add experience</button><div id="sgX"></div>
@@ -167,6 +174,11 @@ function edit(r){
     box('#sgX','Reuse experience from your other profiles',pool('exp',cur.exp).map(e=>[(e.role||'Role')+(e.org?' · '+e.org:''),e]),e=>{cur.exp.push({...e});sub('#ex','exp',F1);sync()});
     box('#sgE','Reuse education from your other profiles',pool('edu',cur.edu).map(e=>[(e.deg||'Course')+(e.org?' · '+e.org:''),e]),e=>{cur.edu.push({...e});sub('#ed','edu',F2);sync()});
   }
+  const phv=()=>{$('#phv').innerHTML=cur.photo?`<img class="ph" src="${esc(cur.photo)}" alt="">`:'<div class="ph phe">No photo</div>';$('#pr').style.display=cur.photo?'':'none';$('#pu').textContent=cur.photo?'Change photo':'Upload photo'};
+  $('#pu').onclick=()=>$('#pf').click();
+  $('#pf').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{cur.photo=await shrink(f);phv();sync()}catch(x){toast('Could not use that image')}};
+  $('#pr').onclick=()=>{cur.photo='';phv();sync()};
+  phv();
   $('#bk').onclick=renderList;
   $('#sv').onclick=async()=>{sync();try{await save(cur);toast('Saved')}catch(e){toast('Save failed')}};
   $('#sh').onclick=async()=>{sync();try{if(!cur.token)cur.token=rid(24);await save(cur);await copy(link(cur.token));edit(cur)}catch(e){toast('Could not share')}};
