@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>My Profile-Resumes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mut:#6b6a64;--ac:#1f6f5c;--ac2:#e3f1ec;--bd:#e0ded6;--dg:#b3392f}
+@media (prefers-color-scheme:dark){:root{--bg:#171716;--card:#222220;--tx:#efeee9;--mut:#a09f97;--ac:#59c3a5;--ac2:#1f332d;--bd:#363633;--dg:#f07c70}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:24px;margin:0}h2{font-size:17px;margin:22px 0 8px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.sub{color:var(--mut);margin:0 0 18px;font-size:14px}
+button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:8px 14px}
+button.p{background:var(--ac);color:#fff;border-color:var(--ac)}button.d{color:var(--dg)}button:disabled{opacity:.5}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.card .info{cursor:pointer;flex:1;min-width:200px}.card b{font-size:17px}.tag{display:inline-block;background:var(--ac2);color:var(--ac);border-radius:20px;padding:1px 10px;font-size:12px;margin-left:6px}
+.card small{display:block;color:var(--mut)}.acts{display:flex;gap:8px;flex-wrap:wrap}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 3px}
+input,textarea{width:100%;font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px 10px}
+textarea{min-height:70px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:520px){.row{grid-template-columns:1fr}}
+.sub-card{border:1px dashed var(--bd);border-radius:10px;padding:8px 12px 12px;margin-bottom:8px}
+.note{background:var(--ac2);border-radius:10px;padding:10px 14px;font-size:14px;margin-bottom:14px}
+.res{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:26px}
+.res h1{font-size:28px}.res .hd{color:var(--ac);font-weight:600}.res .ct{color:var(--mut);font-size:14px;margin:4px 0 14px}
+.res h3{border-bottom:1px solid var(--bd);padding-bottom:3px;margin:20px 0 8px;font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.chip{display:inline-block;background:var(--ac2);border-radius:20px;padding:2px 11px;margin:0 6px 6px 0;font-size:14px}
+.job{margin-bottom:10px}.job span{color:var(--mut);font-size:14px}.pre{white-space:pre-wrap;margin:2px 0}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:14px;z-index:9}
+.empty{text-align:center;color:var(--mut);padding:40px 10px}.auth{max-width:380px;margin:30px auto}.err{color:var(--dg);font-size:14px;min-height:20px}
+@media print{.noprint{display:none!important}body{background:#fff}}
+</style></head><body><main id="app"><p class="sub">Loading…</p></main>
+<script type="module">
+/* ====== Firebase config ====== */
+const firebaseConfig={apiKey:"AIzaSyCDfLaIlLcCdI2jqvDxzBkGy9ZXUeGw9Rg",authDomain:"profileresume.firebaseapp.com",projectId:"profileresume",storageBucket:"profileresume.firebasestorage.app",messagingSenderId:"755918903271",appId:"1:755918903271:web:766caa6a3d0e1070be8f42"};
+/* ================================================================================================== */
+const V="13.4.0",G=`https://www.gstatic.com/firebasejs/${V}/`;
+const {initializeApp}=await import(G+'firebase-app.js');
+const A=await import(G+'firebase-auth.js'),F=await import(G+'firebase-firestore.js');
+const app=initializeApp(firebaseConfig),auth=A.getAuth(app),db=F.getFirestore(app);
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const rid=(n=20)=>{const a=new Uint8Array(n);crypto.getRandomValues(a);return [...a].map(x=>'abcdefghijklmnopqrstuvwxyz0123456789'[x%36]).join('')};
+const link=t=>location.origin+location.pathname+'?r='+t;
+let user=null,list=[],cur=null,unsub=null;
+function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2200)}
+async function copy(t){try{await navigator.clipboard.writeText(t);toast('Link copied')}catch(e){prompt('Copy this link:',t)}}
+
+function resumeHTML(r){
+  const sk=(r.skills||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const ct=[r.email,r.phone,r.location,r.links].filter(Boolean).map(esc).join(' · ');
+  return `<div class="res"><h1>${esc(r.name||'Your name')}</h1>${r.headline?`<div class="hd">${esc(r.headline)}</div>`:''}<div class="ct">${ct}</div>
+  ${r.summary?`<h3>Summary</h3><p class="pre">${esc(r.summary)}</p>`:''}
+  ${sk.length?`<h3>Skills</h3>${sk.map(s=>`<span class="chip">${esc(s)}</span>`).join('')}`:''}
+  ${(r.exp||[]).length?`<h3>Experience</h3>${r.exp.map(e=>`<div class="job"><b>${esc(e.role)}</b> ${e.org?'· '+esc(e.org):''}<br><span>${esc(e.dates)}</span><p class="pre">${esc(e.desc)}</p></div>`).join('')}`:''}
+  ${(r.edu||[]).length?`<h3>Education</h3>${r.edu.map(e=>`<div class="job"><b>${esc(e.deg)}</b> ${e.org?'· '+esc(e.org):''}<br><span>${esc(e.dates)}</span></div>`).join('')}`:''}</div>`;
+}
+
+/* ---------- public viewer: anyone with the link, no login ---------- */
+async function showShared(t){
+  try{
+    const s=await F.getDoc(F.doc(db,'shared',t));
+    if(!s.exists()){$('#app').innerHTML='<div class="empty"><h2>Link not available</h2>This profile-resume was removed or the link is wrong.</div>';return}
+    $('#app').innerHTML=resumeHTML(s.data())+'<p class="noprint sub" style="margin-top:14px">Shared privately with you. <button onclick="print()">Print / save PDF</button></p>';
+  }catch(e){$('#app').innerHTML='<div class="empty"><h2>Cannot open this link</h2></div>'}
+}
+
+/* ---------- login ---------- */
+function renderAuth(){
+  $('#app').innerHTML=`<div class="auth"><h1>My Profile-Resumes</h1><p class="sub">Make different resumes for different people. Share each with a private link.</p>
+  <label>Email</label><input id="em" type="email" autocomplete="email"><label>Password (6+ characters)</label><input id="pw" type="password" autocomplete="current-password">
+  <p class="err" id="er"></p><div class="acts"><button class="p" id="si">Sign in</button><button id="su">Create account</button><button id="gg">Google</button></div>
+  <p class="sub" style="margin-top:12px"><a href="#" id="fp">Forgot password?</a></p></div>`;
+  const run=async f=>{$('#er').textContent='';try{await f()}catch(e){$('#er').textContent=e.code?.replace('auth/','').replace(/-/g,' ')||'Something went wrong'}};
+  $('#si').onclick=()=>run(()=>A.signInWithEmailAndPassword(auth,$('#em').value,$('#pw').value));
+  $('#su').onclick=()=>run(()=>A.createUserWithEmailAndPassword(auth,$('#em').value,$('#pw').value));
+  $('#gg').onclick=()=>run(()=>A.signInWithPopup(auth,new A.GoogleAuthProvider()));
+  $('#fp').onclick=e=>{e.preventDefault();run(async()=>{await A.sendPasswordResetEmail(auth,$('#em').value);toast('Reset email sent')})};
+}
+
+/* ---------- dashboard ---------- */
+const mine=id=>F.doc(db,'users',user.uid,'resumes',id);
+function renderList(){
+  cur=null;
+  $('#app').innerHTML=`<div class="top"><h1>My Profile-Resumes</h1><div class="acts"><button class="p" id="nw">+ New</button><button id="lo">Sign out</button></div></div>
+  <p class="sub">One resume per audience. Only people with a link can see a profile-resume.</p>
+  <div class="note">🔒 Nothing here is public. Each link is a long random code that only works for people you send it to.</div>
+  <div id="ls">${list.length?'':'<div class="empty">No profile-resumes yet. Create your first one.</div>'}</div>`;
+  $('#lo').onclick=()=>A.signOut(auth);
+  $('#nw').onclick=()=>edit({id:rid(10),label:'',name:'',headline:'',email:'',phone:'',location:'',links:'',summary:'',skills:'',exp:[],edu:[],token:null});
+  [...list].sort((a,b)=>(b.updated||0)-(a.updated||0)).forEach(r=>{
+    const c=document.createElement('div');c.className='card';
+    c.innerHTML=`<div class="info"><b>${esc(r.label||'Untitled')}</b>${r.token?'<span class="tag">shared</span>':''}<small>${esc(r.name||'')}${r.headline?' — '+esc(r.headline):''}</small></div><div class="acts"><button class="sh">Share link</button><button class="d dl">Delete</button></div>`;
+    c.querySelector('.info').onclick=()=>edit(r);
+    c.querySelector('.sh').onclick=async()=>{try{if(!r.token)r.token=rid(24);await save(r);await copy(link(r.token))}catch(e){toast('Could not share')}};
+    c.querySelector('.dl').onclick=async()=>{if(!confirm(`Delete "${r.label||'Untitled'}"? Its link will stop working.`))return;try{if(r.token)await F.deleteDoc(F.doc(db,'shared',r.token));await F.deleteDoc(mine(r.id))}catch(e){toast('Delete failed')}};
+    $('#ls').appendChild(c);
+  });
+}
+async function save(r){
+  r.updated=Date.now();
+  await F.setDoc(mine(r.id),r);
+  if(r.token){const{id,label,token,...pub}=r;await F.setDoc(F.doc(db,'shared',r.token),{...pub,owner:user.uid})}
+}
+
+/* ---------- editor ---------- */
+function edit(r){
+  cur=JSON.parse(JSON.stringify(r));
+  const f=(k,l,t='input')=>`<label>${l}</label><${t} data-k="${k}" ${t==='input'?`value="${esc(cur[k])}"`:''}>${t==='textarea'?esc(cur[k])+'</textarea>':''}`;
+  $('#app').innerHTML=`<div class="top"><button id="bk">← Back</button><div class="acts"><button id="sh">Share link</button>${cur.token?'<button class="d" id="un">Stop sharing</button>':''}<button class="p" id="sv">Save</button></div></div>
+  <h2>Purpose of this profile-resume</h2>${f('label','Name it so you remember who it\u2019s for (e.g. “Design jobs – startups”)')}
+  <h2>Details</h2><div class="row"><div>${f('name','Full name')}</div><div>${f('headline','Headline / title')}</div><div>${f('email','Email')}</div><div>${f('phone','Phone')}</div><div>${f('location','Location')}</div><div>${f('links','Website / LinkedIn')}</div></div>
+  ${f('summary','Summary','textarea')}${f('skills','Skills (comma separated)')}
+  <h2>Experience</h2><div id="ex"></div><button id="ax">+ Add experience</button>
+  <h2>Education</h2><div id="ed"></div><button id="ae">+ Add education</button>
+  <h2>Preview</h2><div id="pv"></div>`;
+  const sync=()=>{document.querySelectorAll('[data-k]').forEach(i=>cur[i.dataset.k]=i.value);$('#pv').innerHTML=resumeHTML(cur)};
+  const sub=(id,arr,fields)=>{const box=$(id);box.innerHTML='';cur[arr].forEach((it,i)=>{const d=document.createElement('div');d.className='sub-card';
+    d.innerHTML=fields.map(([n,l,t])=>`<label>${l}</label>${t?`<textarea data-n="${n}">${esc(it[n])}</textarea>`:`<input data-n="${n}" value="${esc(it[n])}">`}`).join('')+'<button class="d" style="margin-top:8px">Remove</button>';
+    d.querySelectorAll('[data-n]').forEach(x=>x.oninput=()=>{it[x.dataset.n]=x.value;$('#pv').innerHTML=resumeHTML(cur)});
+    d.querySelector('button').onclick=()=>{cur[arr].splice(i,1);sub(id,arr,fields);sync()};box.appendChild(d)})};
+  const F1=[['role','Role'],['org','Company'],['dates','Dates'],['desc','What you did','t']],F2=[['deg','Degree / course'],['org','School'],['dates','Dates']];
+  sub('#ex','exp',F1);sub('#ed','edu',F2);
+  $('#ax').onclick=()=>{cur.exp.push({role:'',org:'',dates:'',desc:''});sub('#ex','exp',F1)};
+  $('#ae').onclick=()=>{cur.edu.push({deg:'',org:'',dates:''});sub('#ed','edu',F2)};
+  document.querySelectorAll('[data-k]').forEach(i=>i.oninput=sync);sync();
+  $('#bk').onclick=renderList;
+  $('#sv').onclick=async()=>{sync();try{await save(cur);toast('Saved')}catch(e){toast('Save failed')}};
+  $('#sh').onclick=async()=>{sync();try{if(!cur.token)cur.token=rid(24);await save(cur);await copy(link(cur.token));edit(cur)}catch(e){toast('Could not share')}};
+  const un=$('#un');if(un)un.onclick=async()=>{try{await F.deleteDoc(F.doc(db,'shared',cur.token));cur.token=null;await save(cur);toast('Link disabled');edit(cur)}catch(e){toast('Failed')}};
+}
+
+/* ---------- boot ---------- */
+const tok=new URLSearchParams(location.search).get('r');
+if(tok){showShared(tok.replace(/[^a-z0-9]/g,''))}
+else A.onAuthStateChanged(auth,u=>{
+  user=u;if(unsub){unsub();unsub=null}
+  if(!u){renderAuth();return}
+  unsub=F.onSnapshot(F.collection(db,'users',u.uid,'resumes'),s=>{list=s.docs.map(d=>d.data());if(!cur)renderList()},()=>toast('Could not load'));
+});
+</script></body></html>
