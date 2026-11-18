@@ -41,7 +41,7 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const rid=(n=20)=>{const a=new Uint8Array(n);crypto.getRandomValues(a);return [...a].map(x=>'abcdefghijklmnopqrstuvwxyz0123456789'[x%36]).join('')};
 const link=t=>location.origin+location.pathname+'?r='+t;
-let user=null,list=[],cur=null,unsub=null;
+let user=null,list=[],cur=null,unsub=null,unsub2=null,views={};
 function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2200)}
 async function copy(t){try{await navigator.clipboard.writeText(t);toast('Link copied')}catch(e){prompt('Copy this link:',t)}}
 
@@ -55,12 +55,26 @@ function resumeHTML(r){
   ${(r.edu||[]).length?`<h3>Education</h3>${r.edu.map(e=>`<div class="job"><b>${esc(e.deg)}</b> ${e.org?'· '+esc(e.org):''}<br><span>${esc(e.dates)}</span></div>`).join('')}`:''}</div>`;
 }
 
+/* ---------- view counter (once per browser per day, owner's own views skipped) ---------- */
+async function countView(t,owner){
+  try{
+    await auth.authStateReady?.();
+    if(auth.currentUser?.uid===owner)return;
+    const k='v-'+t+'-'+new Date().toISOString().slice(0,10);
+    if(localStorage.getItem(k))return;
+    await F.setDoc(F.doc(db,'views',t),{owner,count:F.increment(1),last:Date.now()},{merge:true});
+    localStorage.setItem(k,'1');
+  }catch(e){}
+}
+const ago=ts=>{if(!ts)return'';const m=Math.round((Date.now()-ts)/60000);return m<60?m+' min ago':m<1440?Math.round(m/60)+' h ago':Math.round(m/1440)+' days ago'};
+
 /* ---------- public viewer: anyone with the link, no login ---------- */
 async function showShared(t){
   try{
     const s=await F.getDoc(F.doc(db,'shared',t));
     if(!s.exists()){$('#app').innerHTML='<div class="empty"><h2>Link not available</h2>This profile-resume was removed or the link is wrong.</div>';return}
     $('#app').innerHTML=resumeHTML(s.data())+'<p class="noprint sub" style="margin-top:14px">Shared privately with you. <button onclick="print()">Print / save PDF</button></p>';
+    countView(t,s.data().owner);
   }catch(e){$('#app').innerHTML='<div class="empty"><h2>Cannot open this link</h2></div>'}
 }
 
@@ -89,10 +103,10 @@ function renderList(){
   $('#nw').onclick=()=>edit({id:rid(10),label:'',name:'',headline:'',email:'',phone:'',location:'',links:'',summary:'',skills:'',exp:[],edu:[],token:null});
   [...list].sort((a,b)=>(b.updated||0)-(a.updated||0)).forEach(r=>{
     const c=document.createElement('div');c.className='card';
-    c.innerHTML=`<div class="info"><b>${esc(r.label||'Untitled')}</b>${r.token?'<span class="tag">shared</span>':''}<small>${esc(r.name||'')}${r.headline?' — '+esc(r.headline):''}</small></div><div class="acts"><button class="sh">Share link</button><button class="d dl">Delete</button></div>`;
+    c.innerHTML=`<div class="info"><b>${esc(r.label||'Untitled')}</b>${r.token?'<span class="tag">shared</span>':''}<small>${esc(r.name||'')}${r.headline?' — '+esc(r.headline):''}</small>${r.token?`<small>👁 ${(views[r.token]?.count)||0} views${views[r.token]?' · last '+ago(views[r.token].last):''}</small>`:''}</div><div class="acts"><button class="sh">Share link</button><button class="d dl">Delete</button></div>`;
     c.querySelector('.info').onclick=()=>edit(r);
     c.querySelector('.sh').onclick=async()=>{try{if(!r.token)r.token=rid(24);await save(r);await copy(link(r.token))}catch(e){toast('Could not share')}};
-    c.querySelector('.dl').onclick=async()=>{if(!confirm(`Delete "${r.label||'Untitled'}"? Its link will stop working.`))return;try{if(r.token)await F.deleteDoc(F.doc(db,'shared',r.token));await F.deleteDoc(mine(r.id))}catch(e){toast('Delete failed')}};
+    c.querySelector('.dl').onclick=async()=>{if(!confirm(`Delete "${r.label||'Untitled'}"? Its link will stop working.`))return;try{if(r.token)await F.deleteDoc(F.doc(db,'shared',r.token));await F.deleteDoc(F.doc(db,'views',r.token));await F.deleteDoc(mine(r.id))}catch(e){toast('Delete failed')}};
     $('#ls').appendChild(c);
   });
 }
@@ -133,8 +147,9 @@ function edit(r){
 const tok=new URLSearchParams(location.search).get('r');
 if(tok){showShared(tok.replace(/[^a-z0-9]/g,''))}
 else A.onAuthStateChanged(auth,u=>{
-  user=u;if(unsub){unsub();unsub=null}
+  user=u;if(unsub){unsub();unsub=null}if(unsub2){unsub2();unsub2=null}
   if(!u){renderAuth();return}
   unsub=F.onSnapshot(F.collection(db,'users',u.uid,'resumes'),s=>{list=s.docs.map(d=>d.data());if(!cur)renderList()},()=>toast('Could not load'));
+  unsub2=F.onSnapshot(F.query(F.collection(db,'views'),F.where('owner','==',u.uid)),s=>{views={};s.docs.forEach(d=>views[d.id]=d.data());if(!cur)renderList()},()=>{});
 });
 </script></body></html>
